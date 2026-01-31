@@ -22,17 +22,12 @@
   - [5. Autonomous Navigation](#5-autonomous-navigation)
   - [6. Wall Following](#6-wall-following)
 - [Performance Results](#-performance-results)
-- [Installation & Setup](#-installation--setup)
-- [Usage](#-usage)
-- [Repository Structure](#-repository-structure)
 - [Key Algorithms](#-key-algorithms)
   - [1. Velocity Controller](#1-velocity-controller)
   - [2. Waypoint Navigation](#2-waypoint-navigation)
   - [3. Wall Following Algorithm](#3-wall-following-algorithm)
   - [4. Origin Calibration](#4-origin-calibration)
-- [Competition Rules](#-competition-rules)
 - [Lessons Learned](#-lessons-learned)
-- [Future Improvements](#-future-improvements)
 - [References](#-references)
 - [Acknowledgments](#-acknowledgments)
 
@@ -691,6 +686,233 @@ Typical Mission Execution:
 └── Total Autonomous: ~35 seconds (within 45s limit)
 ```
 
+---
+## 🧮 Key Algorithms
+
+### 1. Velocity Controller
+
+#### Differential Drive Kinematics
+
+```cpp
+#define HALF_WHEEL_BASE_B 0.13    // meters (wheelbase / 2)
+#define WHEEL_RADIUS 0.035         // meters
+
+void calcMotorVelSetpoint(float linvel, float angvel) {
+    // Inverse kinematics for differential drive
+    // v_left = v - ω*B
+    // v_right = v + ω*B
+    
+    float angv_left = (linvel - HALF_WHEEL_BASE_B * angvel) / WHEEL_RADIUS;
+    float angv_right = (linvel + HALF_WHEEL_BASE_B * angvel) / WHEEL_RADIUS;
+    
+    // Apply to motor pairs
+    motorVelSetpoint[0] = angv_right;
+    motorVelSetpoint[1] = angv_right;
+    motorVelSetpoint[2] = angv_left;
+    motorVelSetpoint[3] = angv_left;
+}
+```
+
+#### PD Control with Acceleration Feedback
+
+```cpp
+#define KP 50.0
+#define KD -0.01
+
+void controlMotor(float linvel, float angvel) {
+    static unsigned long previous_timestamp;
+    unsigned long current_timestamp = millis();
+    double time_diff = current_timestamp - previous_timestamp;
+    
+    static int prev_tick_dot[4];
+    
+    for (int i = 0; i < 4; i++) {
+        // Calculate current velocity from encoder
+        float tick = ticksPerInterval[i] - prevtick[i];
+        tick = tick / 34.0;  // CPR conversion
+        float rad = tick * 30 * PI / 180;
+        float angvel = rad / (time_diff / 1000.0);
+        
+        prevtick[i] = ticksPerInterval[i];
+        currentWheelAngVel[i] = angvel;
+        
+        // PD control
+        float error = abs(motorVelSetpoint[i]) - abs(currentWheelAngVel[i]);
+        float acceleration = 1000 * (abs(currentWheelAngVel[i]) - abs(prev_tick_dot[i] / time_diff));
+        
+        float u = KP * error + KD * acceleration;
+        
+        currentWheelPwm[i] = currentWheelPwm[i] + u;
+        
+        // Clamp PWM
+        if (currentWheelPwm[i] > 16383) currentWheelPwm[i] = 16383;
+        else if (currentWheelPwm[i] < 0) currentWheelPwm[i] = 0;
+        
+        // Set direction
+        if (motorVelSetpoint[i] > 0) {
+            digitalWrite(motorPINDIR[i], HIGH);
+            motorDir[i] = 1;
+        } else {
+            digitalWrite(motorPINDIR[i], LOW);
+            motorDir[i] = -1;
+        }
+        
+        // Apply PWM
+        ledcWrite(motorPINEN[i], currentWheelPwm[i]);
+    }
+    
+    for (int i = 0; i < 4; i++) {
+        prev_tick_dot[i] = currentWheelAngVel[i];
+    }
+    
+    previous_timestamp = current_timestamp;
+}
+```
+
+**Control Features:**
+- **P term**: Proportional error correction
+- **D term**: Acceleration damping
+- **Feedforward**: Direct PWM accumulation for smooth response
+
+### 2. Waypoint Navigation
+
+#### Sequential Waypoint Execution
+
+```cpp
+int waypoint_iterator = 0;
+
+void target_auto() {
+    // First-time initialization
+    if (!origin_initialized) {
+        // [Origin calibration code - see Section 4]
+    }
+    
+    // Navigate to current waypoint
+    bool success = goTo(waypoints[waypoint_iterator].x, 
+                        waypoints[waypoint_iterator].y);
+    
+    if (success) {
+        Serial.println("SUCCESS!!!!!");
+        
+        // Check if more waypoints remain
+        if (waypoint_iterator + 1 < sizeof(waypoints) / sizeof(waypoints[0])) {
+            waypoint_iterator++;
+        } else {
+            Serial.println("Successful Mission!");
+            robot_mode = MANUAL;  // Return to manual control
+        }
+    }
+    
+    delay(50);
+}
+```
+
+**Mission Flow:**
+```
+START
+  │
+  ├─→ Calibrate origin (5 stable readings)
+  │
+  ├─→ Navigate to waypoint[0]
+  │   ├─→ goTo() returns false → keep navigating
+  │   └─→ goTo() returns true → increment iterator
+  │
+  ├─→ Navigate to waypoint[1]
+  │   └─→ ...
+  │
+  └─→ All waypoints complete → return to MANUAL mode
+```
+
+### 3. Wall Following Algorithm
+
+#### State Machine
+
+```
+┌─────────────┐
+│   FORWARD   │
+│ (front > T) │
+└──────┬──────┘
+       │
+    No │  Front obstacle?
+       │
+       ▼ Yes
+┌─────────────┐
+│  TURN LEFT  │
+│  (rotate)   │
+└──────┬──────┘
+       │
+       │  Right sensor clear?
+       │
+       ▼ Yes
+┌─────────────┐
+│   FORWARD   │
+│   (resume)  │
+└─────────────┘
+```
+
+#### Threshold Tuning
+
+```cpp
+// Distance thresholds (mm)
+int front_tof_threshold[4] = {600, 500, 500, 500};
+// Index corresponds to iteration/corner number
+
+const int left_margin = 250;
+const int right_margin = 200;
+```
+
+**Tuning Process:**
+1. Started with 500mm threshold (too sensitive)
+2. Increased to 600mm for front sensor
+3. Added margin parameters for drift correction
+4. Tested on full circuit, adjusted per corner
+
+### 4. Origin Calibration
+
+#### Stability-Based Initialization
+
+This algorithm ensures the robot doesn't start navigation with a noisy Vive reading:
+
+```cpp
+void calibrate_origin() {
+    int init_count = 0;
+    PositionData prev_state;
+    
+    while (init_count < 5) {
+        GetPosition();
+        
+        if (init_count > 0) {
+            PositionData current_state = state;
+            
+            // Calculate movement since last reading
+            float dx_origin = current_state.x - prev_state.x;
+            float dy_origin = current_state.y - prev_state.y;
+            float dist = sqrt(dx_origin*dx_origin + dy_origin*dy_origin);
+            
+            Serial.print("origin init dist: ");
+            Serial.println(dist);
+            
+            // Check if reading is stable
+            if (dist < 20) {  // Less than 20mm movement
+                init_count++;
+            } else {
+                init_count = 0;  // Reset counter if unstable
+            }
+        } else {
+            init_count++;
+        }
+        
+        prev_state = state;
+    }
+    
+    origin = state;
+    origin_initialized = true;
+    
+    Serial.println("Setting origin to:");
+    Serial.println(origin.x);
+    Serial.println(origin.y);
+}
+```
 ---
 
 ## 📚 Lessons Learned
