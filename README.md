@@ -7,6 +7,16 @@
 [![Python](https://img.shields.io/badge/Arduino-C%2FC%2B%2B-blue?style=for-the-badge&logo=arduino)](https://www.arduino.cc/)
 [![ROS](https://img.shields.io/badge/ESP32-IoT-black?style=for-the-badge&logo=espressif)](https://www.espressif.com/)
 
+
+<div align="center">
+
+<p float="left">
+<img src="images/robo_main.png" alt="Competition Stack" width="45%" />
+  <img src="images/battle_1.png" alt="Robot Setup" width="45%" />
+</p>
+
+</div>
+
 ---
 
 ## 📋 Table of Contents
@@ -138,6 +148,15 @@ The goal was to design, implement, and deploy a robust solution capable of:
 ---
 
 ## 🔬 Technical Approach
+
+<div align="center">
+
+<p float="left">
+<img src="images/robo_doc.png" alt="Competition Stack" width="50%" />
+  <img src="images/battle_2.png" alt="Robot Setup" width="45%" />
+</p>
+
+</div>
 
 ### 1. Mechanical Design
 
@@ -651,6 +670,14 @@ void turn_left() {
 ---
 
 ## 📊 Performance Results
+
+<div align="center">
+
+<p float="left">
+<img src="images/robo_battle_field.png" alt="Competition Stack" width="45%" />
+</p>
+
+</div>
 
 ### Competition Performance
 
