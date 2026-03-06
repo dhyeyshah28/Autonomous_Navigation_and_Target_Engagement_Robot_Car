@@ -12,7 +12,7 @@
 
 <p float="left">
 <img src="Images/robo_main.png" alt="Main Robot Image" width="45%" />
-  <img src="Images/battle_1.png" alt="Robot in battle Arena" width="45%" />
+  <img src="Images/battle_1.png" alt="Robot in battle Arena" width="50%" />
 </p>
 
 </div>
@@ -153,7 +153,7 @@ The goal was to design, implement, and deploy a robust solution capable of:
 
 <p float="left">
 <img src="Images/robo_doc.png" alt="Robot hardware from report" width="50%" />
-  <img src="Images/battle_2.png" alt="Robot in battle arena" width="45%" />
+  <img src="Images/battle_2.png" alt="Robot in battle arena" width="40%" />
 </p>
 
 </div>
@@ -674,7 +674,7 @@ void turn_left() {
 <div align="center">
 
 <p float="left">
-<img src="Images/robo_battle_field.png" alt="Robot in battle arena" width="45%" />
+<img src="Images/robo_battle_field.png" alt="Robot in battle arena" width="40%" />
 </p>
 
 </div>
